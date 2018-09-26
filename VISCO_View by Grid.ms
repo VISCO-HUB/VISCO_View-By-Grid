@@ -2,7 +2,7 @@
 [INFO]
 
 NAME = VISCO_View by Grid
-VERSION = 1.6.1
+VERSION = 1.7.0
 AUTHOR = Vasiliy Lukyanenko
 DEV = VISCO
 HELP = 
@@ -48,8 +48,17 @@ ICON=#("ViewByGrid",1)
 
 +Added: Button Up and Down for sort grid list=
 -Removed: Buttons Update and Select Grid=
-+Added: Context menu with items^ Update and Select Grid=
++ Added: Context menu with items^ Update and Select Grid=
 
+[1.7.0]
+
+* Changed: Improved UI=
++ Added: Create Grid button with options=
++ Added: Context Menu: Rename Active Grid=
++ Added: Context Menu: Remove Active Grid=
++ Added: Context Menu: Sort Up=
++ Added: Context Menu: Sort Down=
+- Removed: Buttons Sort Up and Sort Down=
 
 [ABOUT]
 
@@ -94,21 +103,22 @@ fn parseToLine m =
 )
 
 try(closeRolloutFloater rViewByGrid) catch()
-global rViewByGrid = newRolloutFloater "View by Grid" 200 300
+global rViewByGrid = newRolloutFloater "View by Grid" 200 210
 global ViewByGrid
-global windowHeight = 300
+global CreateGrid
+global windowHeight = 210
+global _OFFSET_ROLLOUTS = 95
 global iWindowPos = [0.0, 0.0]
 global rcRightClick
 
 
 rollout ViewByGrid "View by Grid" width:150 height:170
 (
-	listBox lbxGridList "Select Grid:" 
-	
-	groupbox grpSort "Sort" pos:[5, (lbxGridList.height + 25)] width: (ViewByGrid.width - 10) height: 50
+	listBox lbxGridList "" offset: [-15, -2] width: 190 height: 6	
+	/*groupbox grpSort "Sort" pos:[5, (lbxGridList.height + 5)] width: (ViewByGrid.width - 10) height: 50
 		
-	button btnUp "Up" across: 2 width: (ViewByGrid.width  / 2.5) pos:[15, (lbxGridList.height + 43)]
-	button btnDown "Down" width: (ViewByGrid.width / 2.5) pos:[100, (lbxGridList.height + 43)]
+	button btnUp "Up" across: 2 width: (ViewByGrid.width  / 2.5) pos:[15, (lbxGridList.height + 24)]
+	button btnDown "Down" width: (ViewByGrid.width / 2.5) pos:[100, (lbxGridList.height + 24)]*/
 	timer tmrZoom "" active: false interval: 1
 	
 	--button btnUpdate "Update" across: 2 width: (ViewByGrid.width  / 2.5) pos:[15, (lbxGridList.height + 80)]
@@ -226,7 +236,7 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 	)
 	
 	fn setGrid s =
-	(		
+	(			
 		if(s < 1) do return false
 				
 		try
@@ -267,12 +277,15 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 			for i in 1 to GridName.count do
 			(			
 				if(matchPattern GridName[i] pattern: g.name == true) do 
-				(
+				(					
 					setGrid i
+					return f
 					exit
 				)
 			)
 		)
+		
+		return undefined
 	)
 	
 	fn viewHotkey =
@@ -307,25 +320,34 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 
 	fn setWindowSize y load: false =
 	(
-		o = (ViewByGrid.height - lbxGridList.height)
+		o = (ViewByGrid.height - lbxGridList.height) 
 	
 		if(load) do y += o
 		
 		h = y - o
-		
-		if(y < windowHeight) do return rViewByGrid.size.y = windowHeight
+				
+		if(y < windowHeight - _OFFSET_ROLLOUTS) do return rViewByGrid.size.y = windowHeight
 	
 		lbxGridList.height = h - o
 			
 		ViewByGrid.height = h
-		rViewByGrid.size.y = y
-	
-	
-		grpSort.pos.y = h - o + 25
-		btnUp.pos.y = h - o + 43
-		btnDown.pos.y = h - o + 43
+		rViewByGrid.size.y = y + _OFFSET_ROLLOUTS
+			
+		/*grpSort.pos.y = h - o + 5
+		btnUp.pos.y = h - o + 24
+		btnDown.pos.y = h - o + 24*/
 		--btnUpdate.pos.y = h - o + 80
 		--btnSelectGrid.pos.y = h - o + 80
+	)
+	
+	fn getSelectedGrid = (
+		id = lbxGridList.selection
+		if(id == 0) do return undefined
+		
+		n = lbxGridList.selected 				
+		i = findGrid n
+		if(i != -1) do return 	GridList[i]
+		return undefined
 	)
 	
 	fn sortGrid id sortTo: #up =
@@ -384,25 +406,71 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 		h = (useSettings "h" "float" 0) as float
 		
 			
-		if(h != 0) do setWindowSize h load: true
+		if(h != 0) do setWindowSize (h - _OFFSET_ROLLOUTS) load: true
 		
 
 		callbackGrid = NodeEventCallback mouseUp:true delay:1000 deleted:updateGridList added:updateGridList nameChanged:updateGridList	wireColorChanged:updateGridList	selectionChanged:updateGridList
 		
 		rcmenu rcRightClick
 		(
-			menuItem mItem1 "Update" 
+			menuItem mItem1 "Update List" 
 			menuItem mItem2 "Select Grid" 
+			separator sep0
+			menuItem mRename "Rename Active Grid" enabled: false
+			separator sep1
+			menuItem mUp "Sot Up" 
+			menuItem mDown "Sort Down" 
+			separator sep2
+			menuItem mRemove "Remove Grid" enabled: false
 			
 			on rcRightClick open do 
 			(
+				g = getSelectedGrid()
 				
+				if(g != undefined) do (
+					mRemove.text = "Remove Active Grid: " + g.name
+					mRename.text = "Rename Active Grid: " + g.name
+					mRemove.enabled = true
+					mRename.enabled = true
+				)
+			)
+			
+			on mRename picked do (
+
+				g = getSelectedGrid()
+				
+				if(g != undefined) do (
+					n = CreateGrid.modalGridName()
+					if(n.count > 1) do g.name = n
+				)				
+			)
+			
+			on mRemove picked do (
+				g = getSelectedGrid()
+			
+				if(g != undefined) do (
+					q = queryBox ("Do you really want to delete " + g.name + " ?") title: "Confirm?"
+					
+					if(q) do delete g
+				)
 			)
 			
 			on mItem1 picked do 
 			(
 				getGridList()
 				getActiveGrid()
+			)	
+			
+			on mUp picked do 
+			(
+				id = lbxGridList.selection		
+				ViewByGrid.sortGrid id sortTo: #up
+			)	
+			
+			on mDown picked do 
+			(
+				id = lbxGridList.selection		
+				ViewByGrid.sortGrid id sortTo: #down
 			)	
 			
 			on mItem2 picked do try(select activeGrid)catch()
@@ -483,6 +551,88 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 	)
 )
 
+rollout CreateGrid "" (
+	button btnCreateGrid "Create Grid" width: 170	
+	checkbox cbxActivate "Activate grid after creation"
+	checkbox cbxHorizontalGrid "Create horizontal grid" checked: true
+	
+	fn modalGridName = (
+		global _GRID_NAME = ""
+		try(destroyDialog rSetGridName) catch()
+		
+		rollout rSetGridName "Grid Name" (
+			group "Enter grid name:" (
+				edittext edtGridName ""
+			)
+			
+			button btnOk "Ok" align: #left width: 70 height: 26 offset: [0, 10]
+			
+			on rSetGridName open do (
+				setFocus edtGridName
+			)
+			
+			on btnOk pressed do (
+				_GRID_NAME = edtGridName.text
+				try(destroyDialog rSetGridName) catch()
+			)
+			
+			on edtGridName entered t do (
+				if(t == "") do return false
+				_GRID_NAME = edtGridName.text
+				try(destroyDialog rSetGridName) catch()
+			)
+		)
+		
+		createDialog rSetGridName 220 100 modal: true
+		try(destroyDialog rSetGridName) catch()
+		
+		return _GRID_NAME
+	)
+	
+	on CreateGrid open do (
+				
+	)
+	
+	on btnCreateGrid pressed do (
+		itemsCnt = ViewByGrid.lbxGridList.items.count
+		
+		oldAutoGrid = maxOps.autoGrid 
+		maxOps.autoGrid = true
+				
+		startObjectCreation Grid returnNewNodes: true
+		maxOps.autoGrid  = oldAutoGrid		
+		
+		
+		if(classOf selection[1] == Grid) do (
+			
+			g = selection[1]
+			
+			if(cbxHorizontalGrid.checked) do (
+				pos = g.pos
+				rot = g.rotation as eulerAngles 
+					print rot
+				r = 1
+				if(rot.x >=0) do r = -1
+				
+				ntm = preRotateX g.transform (rot.x * r)			
+				g.transform = ntm				
+					
+				g.pos = pos
+			)	
+			
+			n = modalGridName()
+			if(n.count > 1) do g.name = n
+		)
+
+		if(cbxActivate.checked) do (
+			if(itemsCnt < ViewByGrid.lbxGridList.items.count) do (
+				s = ViewByGrid.lbxGridList.items.count
+				ViewByGrid.setGrid s	
+			)	
+		)
+	)
+)
+
 rollout rAbout "About" 
 (	
 	label lblName "" 
@@ -517,6 +667,7 @@ rollout rAbout "About"
 	)
 )
 
-addRollout ViewByGrid rViewByGrid rolledUp:false 
-addRollout rAbout rViewByGrid rolledUp:true 
+addRollout ViewByGrid rViewByGrid rolledUp:false border: false category: 1
+addRollout CreateGrid rViewByGrid rolledUp:false border: false category: 2
+addRollout rAbout rViewByGrid rolledUp:true category: 100
 
