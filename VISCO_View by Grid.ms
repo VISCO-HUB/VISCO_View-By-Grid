@@ -2,7 +2,7 @@
 [INFO]
 
 NAME = VISCO_View by Grid
-VERSION = 1.7.0
+VERSION = 1.7.1
 AUTHOR = Vasiliy Lukyanenko
 DEV = VISCO
 HELP = 
@@ -59,6 +59,10 @@ ICON=#("ViewByGrid",1)
 + Added: Context Menu: Sort Up=
 + Added: Context Menu: Sort Down=
 - Removed: Buttons Sort Up and Sort Down=
+
+[1.7.1]
+
+* Changed: Removed horizontal grid option and added rotate by 90 option=
 
 [ABOUT]
 
@@ -554,7 +558,7 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 rollout CreateGrid "" (
 	button btnCreateGrid "Create Grid" width: 170	
 	checkbox cbxActivate "Activate grid after creation"
-	checkbox cbxHorizontalGrid "Create horizontal grid" checked: true
+	checkbox cbxHorizontalGrid "Rotate grid by 90deg" checked: true
 	
 	fn modalGridName = (
 		global _GRID_NAME = ""
@@ -611,10 +615,10 @@ rollout CreateGrid "" (
 				pos = g.pos
 				rot = g.rotation as eulerAngles 
 					print rot
-				r = 1
-				if(rot.x >=0) do r = -1
+				r = -1
+				if(rot.x >=0) do r = 1
 				
-				ntm = preRotateX g.transform (rot.x * r)			
+				ntm = preRotateX g.transform -((rot.x + (90 - rot.x)))
 				g.transform = ntm				
 					
 				g.pos = pos
