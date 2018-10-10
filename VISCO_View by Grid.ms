@@ -2,7 +2,7 @@
 [INFO]
 
 NAME = VISCO_View by Grid
-VERSION = 1.7.1
+VERSION = 1.8.0
 AUTHOR = Vasiliy Lukyanenko
 DEV = VISCO
 HELP = 
@@ -64,6 +64,10 @@ ICON=#("ViewByGrid",1)
 
 * Changed: Removed horizontal grid option and added rotate by 90 option=
 
+[1.8.0] 
+- BugFix: Rename grid from context menu=
+- BugFix: Create line when grid activated for views=
+
 [ABOUT]
 
 Script helps to work with grid object views in =
@@ -123,7 +127,7 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 		
 	button btnUp "Up" across: 2 width: (ViewByGrid.width  / 2.5) pos:[15, (lbxGridList.height + 24)]
 	button btnDown "Down" width: (ViewByGrid.width / 2.5) pos:[100, (lbxGridList.height + 24)]*/
-	timer tmrZoom "" active: false interval: 1
+	timer tmrZoom "" active: false interval: 10
 	
 	--button btnUpdate "Update" across: 2 width: (ViewByGrid.width  / 2.5) pos:[15, (lbxGridList.height + 80)]
 	--button btnSelectGrid "Select Grid" width: (ViewByGrid.width / 2.5) pos:[100, (lbxGridList.height + 80)]
@@ -291,35 +295,39 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 		
 		return undefined
 	)
+	global allowZoom = false
 	
-	fn viewHotkey =
+	fn viewHotkey f:#none=
 	(
 		if(activeGrid == undefined) do return false
-		v = viewport.getType()
-		
-		gridTM = inverse activeGrid.transform		
-				
-		n = case v of
-		(
-			#view_front : rotatex gridTM -90
-			#view_bottom : rotatex gridTM 180
-			#view_right: (rotatex gridTM -90; rotatey gridTM -90)
-			#view_left  : (rotatex gridTM -90; rotatey gridTM 90)
-			#view_back : (rotatex gridTM 90; rotatez gridTM 180)
-			#view_top  : gridTM
-			default: undefined
-		)	
-		
-		if(n != undefined) do
-		(
-			viewport.setType #view_iso_user			
-			viewport.setTM gridTM		
-			toolMode.coordsys #grid					
-			ForceCompleteRedraw()
 			
-			tmrZoom.active = false			
-			tmrZoom.active = true			
+		v = viewport.getType()
+		if(f != #none) do v = f
+		
+		if(allowZoom) do (
+			max zoomext sel	
 		)
+		
+		case v of
+		(
+			#view_top  : actionMan.executeAction 0 "40315"  -- Views: Grid Top
+			#view_front :  actionMan.executeAction 0 "40316"  -- Views: Grid Front
+			#view_back: actionMan.executeAction 0 "40317"  -- Views: Grid Back
+			#view_bottom : actionMan.executeAction 0 "40318"  -- Views: Grid Bottom
+			#view_left : actionMan.executeAction 0 "40319"  -- Views: Grid Left
+			#view_right: actionMan.executeAction 0 "40320"  -- Views: Grid Right				
+			default: return allowZoom = false	
+		)
+			
+		toolMode.coordsys #grid	
+		disableSceneRedraw()
+		enableSceneRedraw()
+		ForceCompleteRedraw()
+	
+		allowZoom = true
+		
+		tmrZoom.active = false			
+		tmrZoom.active = true	
 	)
 
 	fn setWindowSize y load: false =
@@ -389,10 +397,20 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 	
 	-- Without timer 3dMax 2012 will crash!
 	on tmrZoom tick do
-	(
+	(		
 		max zoomext sel 	
 		max zoomext sel 	
 		max zoomext sel 	
+		/*
+		actionMan.executeAction 0 "310" 
+		actionMan.executeAction 0 "310" 
+		actionMan.executeAction 0 "310" */
+		
+		ForceCompleteRedraw()
+		ForceCompleteRedraw()
+		ForceCompleteRedraw()
+		ForceCompleteRedraw()
+		
 		tmrZoom.active = false
 	)
 
@@ -414,9 +432,17 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 		
 
 		callbackGrid = NodeEventCallback mouseUp:true delay:1000 deleted:updateGridList added:updateGridList nameChanged:updateGridList	wireColorChanged:updateGridList	selectionChanged:updateGridList
+			
 		
 		rcmenu rcRightClick
 		(
+			menuItem mTop "Top" 
+			menuItem mBottom "Bottom" 
+			menuItem mFront "Front" 
+			menuItem mBack "Back" 
+			menuItem mLeft "Left" 
+			menuItem mRight "Right" 
+			separator sep00
 			menuItem mItem1 "Update List" 
 			menuItem mItem2 "Select Grid" 
 			separator sep0
@@ -426,6 +452,11 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 			menuItem mDown "Sort Down" 
 			separator sep2
 			menuItem mRemove "Remove Grid" enabled: false
+			
+			fn setView type = (
+				ViewByGrid.viewHotkey f:type 
+				ViewByGrid.viewHotkey f:type 
+			)
 			
 			on rcRightClick open do 
 			(
@@ -444,8 +475,9 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 				g = getSelectedGrid()
 				
 				if(g != undefined) do (
-					n = CreateGrid.modalGridName()
+					n = CreateGrid.modalGridName()					
 					if(n.count > 1) do g.name = n
+					getGridList()
 				)				
 			)
 			
@@ -476,6 +508,16 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 				id = lbxGridList.selection		
 				ViewByGrid.sortGrid id sortTo: #down
 			)	
+			
+			on mTop picked do (
+				ViewByGrid.viewHotkey f:#view_top 
+				ViewByGrid.viewHotkey f:#view_top 
+			)
+			on mBottom picked do setView #view_bottom
+			on mFront picked do setView #view_front 
+			on mBack picked do setView #view_back
+			on mLeft picked do setView #view_left
+			on mRight picked do setView #view_right
 			
 			on mItem2 picked do try(select activeGrid)catch()
 		)
