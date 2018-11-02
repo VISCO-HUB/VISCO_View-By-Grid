@@ -2,7 +2,7 @@
 [INFO]
 
 NAME = VISCO_View by Grid
-VERSION = 1.8.0
+VERSION = 1.8.1
 AUTHOR = Vasiliy Lukyanenko
 DEV = VISCO
 HELP = 
@@ -68,6 +68,10 @@ ICON=#("ViewByGrid",1)
 - BugFix: Rename grid from context menu=
 - BugFix: Create line when grid activated for views=
 
+[1.8.1] 
+* Changed: Rethought window resizing system=
++ Added: Context menu item Grid List Size=
+
 [ABOUT]
 
 Script helps to work with grid object views in =
@@ -110,19 +114,56 @@ fn parseToLine m =
 	return l
 )
 
+fn useSettings k p w =
+(	
+	d = getFilenamePath  (getThisScriptFilename())
+	n = filenameFromPath (getThisScriptFilename())			
+	settingsFile = d + @"ini\" + (sysInfo.username) + "_" + n + ".ini"
+			
+	szUser = sysInfo.computername
+	case w of
+	(
+		0:
+		(
+			s = getINISetting settingsFile szUser k
+			case p of
+			(
+				"int": return s as integer
+				"float": return s as float
+				"bool": if s == "true" then true else false
+				default: return s
+			)
+		)
+		default: return setINISetting settingsFile szUser k (p as string)
+	)
+)
+
+fn dbg a = (
+	clearListener()
+	print "---------------"
+	print a 
+	print "---------------"
+)
+
 try(closeRolloutFloater rViewByGrid) catch()
-global rViewByGrid = newRolloutFloater "View by Grid" 200 210
-global ViewByGrid
+clearListener()
 global CreateGrid
-global windowHeight = 210
+global _WINDOW_HEIGHT = 220
+global _LBX_LINE_SIZE = 13
 global _OFFSET_ROLLOUTS = 95
 global iWindowPos = [0.0, 0.0]
 global rcRightClick
+global _LBX_SIZES = #(8, 15, 30, 50)
+global _LBX_HEIGHT = _LBX_SIZES[1]
 
 
-rollout ViewByGrid "View by Grid" width:150 height:170
+global rViewByGrid = newRolloutFloater "View by Grid" 200 _WINDOW_HEIGHT
+global ViewByGrid
+
+	
+rollout ViewByGrid "View by Grid" width:150 height: 0
 (
-	listBox lbxGridList "" offset: [-15, -2] width: 190 height: 6	
+	listBox lbxGridList "" offset: [-15, -2] width: 190 height:  1
 	/*groupbox grpSort "Sort" pos:[5, (lbxGridList.height + 5)] width: (ViewByGrid.width - 10) height: 50
 		
 	button btnUp "Up" across: 2 width: (ViewByGrid.width  / 2.5) pos:[15, (lbxGridList.height + 24)]
@@ -135,32 +176,6 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 	global GridList = #()
 	global GridName = #()
 	local callbackGrid = undefined
-	
-	
-	
-	fn useSettings k p w =
-	(	
-		d = getFilenamePath  (getThisScriptFilename())
-		n = filenameFromPath (getThisScriptFilename())			
-		settingsFile = d + @"ini\" + (sysInfo.username) + "_" + n + ".ini"
-				
-		szUser = sysInfo.computername
-		case w of
-		(
-			0:
-			(
-				s = getINISetting settingsFile szUser k
-				case p of
-				(
-					"int": return s as integer
-					"float": return s as float
-					"bool": if s == "true" then true else false
-					default: return s
-				)
-			)
-			default: return setINISetting settingsFile szUser k (p as string)
-		)
-	)
 	
 	fn saveWindowPos =
 	(
@@ -274,8 +289,7 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 		)
 		
 		return p
-	)
-		
+	)	
 	
 	fn getActiveGrid =
 	(
@@ -330,26 +344,22 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 		tmrZoom.active = true	
 	)
 
-	fn setWindowSize y load: false =
-	(
-		o = (ViewByGrid.height - lbxGridList.height) 
-	
-		if(load) do y += o
+	fn setWindowSize size: -1 reload: false =
+	(	
+		if(size != -1) do useSettings "hh" size 1
 		
-		h = y - o
-				
-		if(y < windowHeight - _OFFSET_ROLLOUTS) do return rViewByGrid.size.y = windowHeight
-	
-		lbxGridList.height = h - o
+		h = useSettings "hh" "int" 0
 			
-		ViewByGrid.height = h
-		rViewByGrid.size.y = y + _OFFSET_ROLLOUTS
-			
-		/*grpSort.pos.y = h - o + 5
-		btnUp.pos.y = h - o + 24
-		btnDown.pos.y = h - o + 24*/
-		--btnUpdate.pos.y = h - o + 80
-		--btnSelectGrid.pos.y = h - o + 80
+		if(h  != 0 and h != _LBX_SIZES[1]) do (
+			_LBX_HEIGHT = h
+			_WINDOW_HEIGHT = _WINDOW_HEIGHT + ((_LBX_HEIGHT - _LBX_SIZES[1]) * _LBX_LINE_SIZE)										
+		)
+		
+		lbxGridList.height = _LBX_HEIGHT * _LBX_LINE_SIZE
+		ViewByGrid.height = lbxGridList.height + 10
+		rViewByGrid.size.y = _WINDOW_HEIGHT
+		
+		if(reload) do fileIn (getThisScriptFileName())			
 	)
 	
 	fn getSelectedGrid = (
@@ -395,6 +405,7 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 		lbxGridList.selection = idOrder
 	)	
 	
+	
 	-- Without timer 3dMax 2012 will crash!
 	on tmrZoom tick do
 	(		
@@ -425,15 +436,10 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 
 		try(rViewByGrid.pos = [x, y]) catch()
 		
-		h = (useSettings "h" "float" 0) as float
+		setWindowSize()
 		
-			
-		if(h != 0) do setWindowSize (h - _OFFSET_ROLLOUTS) load: true
-		
-
 		callbackGrid = NodeEventCallback mouseUp:true delay:1000 deleted:updateGridList added:updateGridList nameChanged:updateGridList	wireColorChanged:updateGridList	selectionChanged:updateGridList
-			
-		
+				
 		rcmenu rcRightClick
 		(
 			menuItem mTop "Top" 
@@ -448,7 +454,14 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 			separator sep0
 			menuItem mRename "Rename Active Grid" enabled: false
 			separator sep1
-			menuItem mUp "Sot Up" 
+			subMenu "Grid List Size" (
+				menuItem mSize1 "Small"
+				menuItem mSize2 "Medium"
+				menuItem mSize3 "Large"
+				menuItem mSize4 "Super Large"
+			)
+			separator sep5
+			menuItem mUp "Sort Up" 
 			menuItem mDown "Sort Down" 
 			separator sep2
 			menuItem mRemove "Remove Grid" enabled: false
@@ -457,6 +470,16 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 				ViewByGrid.viewHotkey f:type 
 				ViewByGrid.viewHotkey f:type 
 			)
+			
+			fn newSize type = (
+				s = _LBX_SIZES[type]
+				setWindowSize size: s reload: true
+			)
+			
+			on mSize1 picked do newSize 1
+			on mSize2 picked do newSize 2
+			on mSize3 picked do newSize 3
+			on mSize4 picked do newSize 4
 			
 			on rcRightClick open do 
 			(
@@ -537,7 +560,7 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 	
 	on ViewByGrid resized s do
 	(				
-		setWindowSize s[2]
+		--setWindowSize s[2]
 	)
 	
 	on ViewByGrid close  do
@@ -546,8 +569,6 @@ rollout ViewByGrid "View by Grid" width:150 height:170
 		
 		callbackGrid = undefined
 		gc light:true
-		
-		useSettings "h" ViewByGrid.height 1
 		
 		unRegisterRedrawViewsCallback viewHotkey	
 		callbacks.removescripts id:#fwdManipulate
